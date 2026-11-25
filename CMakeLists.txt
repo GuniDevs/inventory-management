@@ -13,6 +13,7 @@ add_library(inventory_core
     src/stock_controller.cpp
     src/order_controller.cpp
     src/router.cpp
+    src/csv_io.cpp
     src/util.cpp)
 target_include_directories(inventory_core PUBLIC src)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

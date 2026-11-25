@@ -34,6 +34,10 @@ bool ProductRepository::update(const Product& product) {
     return true;
 }
 
+bool ProductRepository::remove(int id) {
+    return products_.erase(id) == 1;
+}
+
 std::vector<Product> ProductRepository::all() const {
     std::vector<Product> result;
     result.reserve(products_.size());

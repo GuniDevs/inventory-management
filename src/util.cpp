@@ -68,4 +68,74 @@ std::string format_money(std::int64_t cents) {
     return text;
 }
 
+std::string escape_csv(const std::string& field) {
+    std::string text = field;
+    if (!text.empty() && (text[0] == '=' || text[0] == '+' || text[0] == '-' || text[0] == '@')) {
+        text.insert(text.begin(), '\'');
+    }
+    if (text.find_first_of(",\"\r\n") == std::string::npos) {
+        return text;
+    }
+    std::string quoted = "\"";
+    for (char c : text) {
+        if (c == '"') {
+            quoted.push_back('"');
+        }
+        quoted.push_back(c);
+    }
+    quoted.push_back('"');
+    return quoted;
+}
+
+bool split_csv_line(const std::string& line, std::vector<std::string>& fields) {
+    fields.clear();
+    std::string current;
+    bool in_quotes = false;
+    for (std::size_t i = 0; i < line.size(); i++) {
+        const char c = line[i];
+        if (in_quotes) {
+            if (c != '"') {
+                current.push_back(c);
+            } else if (i + 1 < line.size() && line[i + 1] == '"') {
+                current.push_back('"');
+                i++;
+            } else {
+                in_quotes = false;
+            }
+        } else if (c == '"') {
+            in_quotes = true;
+        } else if (c == ',') {
+            fields.push_back(current);
+            current.clear();
+        } else {
+            current.push_back(c);
+        }
+    }
+    fields.push_back(current);
+    return !in_quotes;
+}
+
+bool is_safe_csv_path(const std::string& path) {
+    constexpr std::size_t kMaxLength = 255;
+    const std::string suffix = ".csv";
+    if (path.size() <= suffix.size() || path.size() > kMaxLength) {
+        return false;
+    }
+    if (path.compare(path.size() - suffix.size(), suffix.size(), suffix) != 0) {
+        return false;
+    }
+    if (path[0] == '/' || path[0] == '\\' || path.find(':') != std::string::npos) {
+        return false;
+    }
+    if (path.find("..") != std::string::npos) {
+        return false;
+    }
+    for (char c : path) {
+        if (static_cast<unsigned char>(c) < 0x20) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace inventory

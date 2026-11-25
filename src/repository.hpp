@@ -16,6 +16,7 @@ public:
     std::optional<Product> find_by_id(int id) const;
     std::optional<Product> find_by_sku(const std::string& sku) const;
     bool update(const Product& product);
+    bool remove(int id);  // false when there is no such product
     std::vector<Product> all() const;
 
 private:

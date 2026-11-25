@@ -30,8 +30,15 @@ ctest --test-dir build --output-on-failure
 product add <sku> <name> <quantity> <reorder level> <price cents>
 product list
 product show <sku>
+product price <sku> <price cents>
+product discount <sku> <percent>          (1 to 90 percent off)
+product remove <sku>                      (refused while an open order uses it)
+product export <file.csv>
+product import <file.csv>
 stock receive <sku> <quantity>
+stock adjust <sku> <change> "<reason>"    (the change may be negative; stock never goes below zero)
 stock low
+stock reorder
 stock value
 order create <sku:quantity> [<sku:quantity> ...]
 order fulfill <id>
@@ -41,3 +48,6 @@ help | quit
 ```
 
 Put a name with spaces in quotes, for example `product add A-1 "Blue Widget" 10 3 1999`. Prices are whole cents.
+
+CSV files for `export` and `import` must be plain relative names ending in `.csv` (no absolute paths, no `..`). The first
+line is `sku,name,quantity,reorder_level,price_cents`.

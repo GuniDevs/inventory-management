@@ -1,5 +1,9 @@
 #include "inventory_service.hpp"
 
+#include <limits>
+
+#include "util.hpp"
+
 namespace inventory {
 
 Result InventoryService::add_product(const std::string& sku, const std::string& name, int quantity,
@@ -52,6 +56,87 @@ std::int64_t InventoryService::stock_value_cents() const {
         total += static_cast<std::int64_t>(product.quantity) * product.price_cents;
     }
     return total;
+}
+
+Result InventoryService::adjust_stock(const std::string& sku, int delta, const std::string& reason) {
+    if (delta == 0) {
+        return {false, "the change must not be zero"};
+    }
+    if (reason.empty()) {
+        return {false, "a reason is required"};
+    }
+    auto product = products_.find_by_sku(sku);
+    if (!product) {
+        return {false, "unknown sku " + sku};
+    }
+    const std::int64_t updated = static_cast<std::int64_t>(product->quantity) + delta;
+    if (updated < 0) {
+        return {false, "stock of " + sku + " cannot go below zero"};
+    }
+    if (updated > std::numeric_limits<int>::max()) {
+        return {false, "stock of " + sku + " would be too large"};
+    }
+    product->quantity = static_cast<int>(updated);
+    products_.update(*product);
+    return {true, "stock of " + sku + " is now " + std::to_string(product->quantity) + " (" + reason + ")"};
+}
+
+Result InventoryService::set_price(const std::string& sku, std::int64_t price_cents) {
+    if (price_cents < 0) {
+        return {false, "price cannot be negative"};
+    }
+    auto product = products_.find_by_sku(sku);
+    if (!product) {
+        return {false, "unknown sku " + sku};
+    }
+    product->price_cents = price_cents;
+    products_.update(*product);
+    return {true, "price of " + sku + " is now " + format_money(price_cents)};
+}
+
+Result InventoryService::apply_discount(const std::string& sku, int percent) {
+    if (percent < 1 || percent > 90) {
+        return {false, "a discount must be between 1 and 90 percent"};
+    }
+    auto product = products_.find_by_sku(sku);
+    if (!product) {
+        return {false, "unknown sku " + sku};
+    }
+    // Keep (100 - percent) percent of the price. The price is split so the multiplication cannot overflow.
+    const std::int64_t keep = 100 - percent;
+    const std::int64_t price = product->price_cents;
+    product->price_cents = (price / 100) * keep + (price % 100) * keep / 100;
+    products_.update(*product);
+    return {true, "price of " + sku + " is now " + format_money(product->price_cents)};
+}
+
+Result InventoryService::remove_product(const std::string& sku) {
+    auto product = products_.find_by_sku(sku);
+    if (!product) {
+        return {false, "unknown sku " + sku};
+    }
+    for (const Order& order : orders_.all()) {
+        if (order.status != OrderStatus::Open) {
+            continue;
+        }
+        for (const OrderLine& line : order.lines) {
+            if (line.product_id == product->id) {
+                return {false, "open order " + std::to_string(order.id) + " still needs " + sku};
+            }
+        }
+    }
+    products_.remove(product->id);
+    return {true, "removed product " + sku};
+}
+
+std::vector<ReorderSuggestion> InventoryService::reorder_suggestions() const {
+    std::vector<ReorderSuggestion> suggestions;
+    for (const Product& product : low_stock()) {
+        // Order enough to get back to twice the reorder level, plus one.
+        const std::int64_t target = static_cast<std::int64_t>(product.reorder_level) * 2 + 1;
+        suggestions.push_back({product.sku, target - product.quantity});
+    }
+    return suggestions;
 }
 
 Result InventoryService::create_order(const std::vector<std::pair<std::string, int>>& lines) {
