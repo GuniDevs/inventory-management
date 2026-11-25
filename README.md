@@ -49,5 +49,5 @@ help | quit
 
 Put a name with spaces in quotes, for example `product add A-1 "Blue Widget" 10 3 1999`. Prices are whole cents.
 
-CSV files for `export` and `import` must be plain relative names ending in `.csv` (no absolute paths, no `..`). The first
+CSV files for `export` and `import` must be plain relative names  ending in `.csv` (no absolute paths, no `..`). The first
 line is `sku,name,quantity,reorder_level,price_cents`.
