@@ -5,7 +5,8 @@
 namespace inventory {
 
 std::string StockController::usage() const {
-    return "stock receive <sku> <quantity> | stock low | stock value";
+    return "stock receive <sku> <quantity> | stock low | stock value | stock adjust <sku> <change> <reason> | "
+           "stock reorder";
 }
 
 Result StockController::handle(const std::vector<std::string>& args) {
@@ -40,6 +41,26 @@ Result StockController::handle(const std::vector<std::string>& args) {
 
     if (action == "value") {
         return {true, "stock value: " + format_money(service_.stock_value_cents())};
+    }
+
+    if (action == "adjust") {
+        int delta = 0;
+        if (args.size() != 4 || !parse_int(args[2], delta)) {
+            return {false, "usage: stock adjust <sku> <change> <reason>"};
+        }
+        return service_.adjust_stock(args[1], delta, args[3]);
+    }
+
+    if (action == "reorder") {
+        const std::vector<ReorderSuggestion> suggestions = service_.reorder_suggestions();
+        if (suggestions.empty()) {
+            return {true, "nothing needs reordering"};
+        }
+        std::string text;
+        for (const ReorderSuggestion& suggestion : suggestions) {
+            text += format_reorder_line(suggestion.sku, suggestion.quantity) + "\n";
+        }
+        return {true, text};
     }
 
     return {false, "unknown stock command '" + action + "'. usage: " + usage()};

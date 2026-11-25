@@ -28,6 +28,12 @@ struct Order {
     OrderStatus status = OrderStatus::Open;
 };
 
+// How many units of a product to order so it is back above its reorder level.
+struct ReorderSuggestion {
+    std::string sku;
+    std::int64_t quantity = 0;
+};
+
 // What every service call and controller returns: did it work, and a message for the user.
 struct Result {
     bool ok = false;

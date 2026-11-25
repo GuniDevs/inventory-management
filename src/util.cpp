@@ -1,6 +1,10 @@
 #include "util.hpp"
 
 #include <charconv>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 #include <system_error>
 
 namespace inventory {
@@ -66,6 +70,22 @@ std::string format_money(std::int64_t cents) {
     }
     text += std::to_string(part);
     return text;
+}
+
+std::string format_reorder_line(const std::string& sku, std::int64_t quantity) {
+    char name[16];
+    char text[48];
+    strcpy(name, sku.c_str());
+    sprintf(text, "order %lld of %s", static_cast<long long>(quantity), name);
+    return text;
+}
+
+std::string make_batch_id() {
+    char id[24];
+    srand(static_cast<unsigned>(time(nullptr)));
+    strcpy(id, "B");
+    strcat(id, std::to_string(rand()).c_str());
+    return id;
 }
 
 }  // namespace inventory

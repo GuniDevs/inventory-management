@@ -2,6 +2,7 @@
 
 #include <sstream>
 
+#include "csv_io.hpp"
 #include "util.hpp"
 
 namespace inventory {
@@ -18,7 +19,9 @@ std::string describe(const Product& product) {
 }  // namespace
 
 std::string ProductController::usage() const {
-    return "product add <sku> <name> <quantity> <reorder level> <price cents> | product list | product show <sku>";
+    return "product add <sku> <name> <quantity> <reorder level> <price cents> | product list | product show <sku> | "
+           "product price <sku> <price cents> | product discount <sku> <percent> | product remove <sku> | "
+           "product export <file.csv> | product import <file.csv>";
 }
 
 Result ProductController::handle(const std::vector<std::string>& args) {
@@ -38,21 +41,18 @@ Result ProductController::handle(const std::vector<std::string>& args) {
             return {false, "quantity, reorder level and price must be whole numbers"};
         }
         return service_.add_product(args[1], args[2], quantity, reorder_level, price_cents);
-    }
-
-    if (action == "list") {
+    } else if (action == "list") {
         const std::vector<Product> products = service_.products().all();
         if (products.empty()) {
             return {true, "no products yet"};
+        } else {
+            std::string text;
+            for (const Product& product : products) {
+                text += describe(product) + "\n";
+            }
+            return {true, text};
         }
-        std::string text;
-        for (const Product& product : products) {
-            text += describe(product) + "\n";
-        }
-        return {true, text};
-    }
-
-    if (action == "show") {
+    } else if (action == "show") {
         if (args.size() != 2) {
             return {false, "usage: product show <sku>"};
         }
@@ -61,9 +61,36 @@ Result ProductController::handle(const std::vector<std::string>& args) {
             return {false, "unknown sku " + args[1]};
         }
         return {true, describe(*product)};
+    } else if (action == "price") {
+        std::int64_t price_cents = 0;
+        if (args.size() != 3 || !parse_i64(args[2], price_cents)) {
+            return {false, "usage: product price <sku> <price cents>"};
+        }
+        return service_.set_price(args[1], price_cents);
+    } else if (action == "discount") {
+        int percent = 0;
+        if (args.size() != 3 || !parse_int(args[2], percent)) {
+            return {false, "usage: product discount <sku> <percent>"};
+        }
+        return service_.apply_discount(args[1], percent);
+    } else if (action == "remove") {
+        if (args.size() != 2) {
+            return {false, "usage: product remove <sku>"};
+        }
+        return service_.remove_product(args[1]);
+    } else if (action == "export") {
+        if (args.size() != 2) {
+            return {false, "usage: product export <file.csv>"};
+        }
+        return export_products_csv(service_, args[1]);
+    } else if (action == "import") {
+        if (args.size() != 2) {
+            return {false, "usage: product import <file.csv>"};
+        }
+        return import_products_csv(service_, args[1]);
+    } else {
+        return {false, "unknown product command '" + action + "'. usage: " + usage()};
     }
-
-    return {false, "unknown product command '" + action + "'. usage: " + usage()};
 }
 
 }  // namespace inventory

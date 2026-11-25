@@ -1,8 +1,10 @@
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <memory>
 #include <string>
 
+#include "csv_io.hpp"
 #include "inventory_service.hpp"
 #include "order_controller.hpp"
 #include "product_controller.hpp"
@@ -134,12 +136,87 @@ static void test_controllers() {
     CHECK(shop.router.dispatch("").ok);
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Catalog maintenance and CSV exchange
+
+static void test_adjust_stock() {
+    Shop shop;
+    shop.service.add_product("A-1", "Widget", 10, 3, 1000);
+
+    CHECK(shop.service.adjust_stock("A-1", 5, "found in the back").ok);
+    CHECK(shop.products.find_by_sku("A-1")->quantity == 15);
+    CHECK(shop.service.adjust_stock("A-1", -4, "damaged").ok);
+    CHECK(shop.products.find_by_sku("A-1")->quantity == 11);
+    CHECK(!shop.service.adjust_stock("nope", 5, "found").ok);
+}
+
+static void test_pricing() {
+    Shop shop;
+    shop.service.add_product("A-1", "Widget", 1, 0, 2000);
+
+    CHECK(shop.service.set_price("A-1", 2500).ok);
+    CHECK(shop.products.find_by_sku("A-1")->price_cents == 2500);
+
+    CHECK(shop.service.apply_discount("A-1", 20).ok);
+    CHECK(shop.products.find_by_sku("A-1")->price_cents == 2000);
+}
+
+static void test_remove_product() {
+    Shop shop;
+    shop.service.add_product("A-1", "Widget", 5, 1, 1000);
+
+    CHECK(shop.service.remove_product("A-1").ok);
+    CHECK(!shop.products.find_by_sku("A-1").has_value());
+}
+
+static void test_reorder_suggestions() {
+    Shop shop;
+    shop.service.add_product("A-1", "Widget", 2, 3, 1000);
+    shop.service.add_product("C-1", "Gizmo", 50, 10, 500);
+
+    const std::vector<ReorderSuggestion> suggestions = shop.service.reorder_suggestions();
+    CHECK(suggestions.size() == 1);
+    CHECK(suggestions[0].sku == "A-1" && suggestions[0].quantity == 5);
+}
+
+static void test_csv() {
+    Shop shop;
+    shop.service.add_product("A-1", "Widget", 10, 3, 1999);
+    shop.service.add_product("B-1", "Gadget", 4, 1, 250);
+
+    Result exported = export_products_csv(shop.service, "test_export.csv");
+    CHECK(exported.ok);
+
+    Shop other;
+    Result imported = import_products_csv(other.service, "test_export.csv");
+    CHECK(imported.ok);
+    CHECK(other.products.find_by_sku("A-1")->price_cents == 1999);
+    CHECK(other.products.find_by_sku("B-1")->quantity == 4);
+    std::remove("test_export.csv");
+}
+
+static void test_catalog_controllers() {
+    Shop shop;
+    CHECK(shop.router.dispatch("product add A-1 Widget 2 3 1999").ok);
+    CHECK(shop.router.dispatch("product price A-1 2500").ok);
+    CHECK(shop.router.dispatch("product discount A-1 20").ok);
+    CHECK(shop.router.dispatch("product show A-1").message.find("20.00") != std::string::npos);
+    CHECK(shop.router.dispatch("stock adjust A-1 4 \"found in the back\"").ok);
+    CHECK(shop.router.dispatch("stock reorder").ok);
+}
+
 int main() {
     test_util();
     test_products();
     test_stock();
     test_orders();
     test_controllers();
+    test_adjust_stock();
+    test_pricing();
+    test_remove_product();
+    test_reorder_suggestions();
+    test_csv();
+    test_catalog_controllers();
     if (failures == 0) {
         std::cout << "all tests passed\n";
         return 0;

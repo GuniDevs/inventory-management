@@ -30,8 +30,15 @@ ctest --test-dir build --output-on-failure
 product add <sku> <name> <quantity> <reorder level> <price cents>
 product list
 product show <sku>
+product price <sku> <price cents>
+product discount <sku> <percent>
+product remove <sku>
+product export <file.csv>
+product import <file.csv>
 stock receive <sku> <quantity>
+stock adjust <sku> <change> "<reason>"
 stock low
+stock reorder
 stock value
 order create <sku:quantity> [<sku:quantity> ...]
 order fulfill <id>

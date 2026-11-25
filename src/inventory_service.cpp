@@ -1,5 +1,7 @@
 #include "inventory_service.hpp"
 
+#include "util.hpp"
+
 namespace inventory {
 
 Result InventoryService::add_product(const std::string& sku, const std::string& name, int quantity,
@@ -52,6 +54,105 @@ std::int64_t InventoryService::stock_value_cents() const {
         total += static_cast<std::int64_t>(product.quantity) * product.price_cents;
     }
     return total;
+}
+
+Result InventoryService::register_product(const std::string& sku, const std::string& name, int quantity,
+                                          int reorder_level, std::int64_t price_cents, const std::string& supplier,
+                                          const std::string& location, const std::string& barcode) {
+    std::string full_name = name;
+    if (supplier.size() > 0) {
+        full_name = full_name + " [" + supplier + "]";
+    }
+    if (location.size() > 0) {
+        full_name = full_name + " @" + location;
+    }
+    if (barcode.size() > 0) {
+        full_name = full_name + " #" + barcode;
+    }
+    return add_product(sku, full_name, quantity, reorder_level, price_cents);
+}
+
+Result InventoryService::adjust_stock(const std::string& sku, int delta, const std::string& reason) {
+    auto product = products_.find_by_sku(sku);
+    if (product) {
+        if (delta != 0) {
+            if (!reason.empty()) {
+                int updated = product->quantity + delta;
+                if (updated >= 0) {
+                    product->quantity = updated;
+                    products_.update(*product);
+                    return {true, "stock of " + sku + " is now " + std::to_string(product->quantity) + " (" + reason + ")"};
+                } else {
+                    return {false, "stock of " + sku + " cannot go below zero"};
+                }
+            } else {
+                return {false, "a reason is required"};
+            }
+        } else {
+            return {false, "the change must not be zero"};
+        }
+    } else {
+        return {false, "unknown sku " + sku};
+    }
+}
+
+Result InventoryService::set_price(const std::string& sku, std::int64_t price_cents) {
+    if (price_cents < 0) {
+        return {false, "price cannot be negative"};
+    }
+    auto product = products_.find_by_sku(sku);
+    if (!product) {
+        return {false, "unknown sku " + sku};
+    }
+    product->price_cents = price_cents;
+    products_.update(*product);
+    return {true, "price of " + sku + " is now " + format_money(price_cents)};
+}
+
+Result InventoryService::apply_discount(const std::string& sku, int percent) {
+    auto product = products_.find_by_sku(sku);
+    if (!product) {
+        return {false, "unknown sku " + sku};
+    }
+    std::int64_t discounted;
+    if (percent > 0 && percent <= 90) {
+        discounted = product->price_cents * (100 - percent) / 100;
+    }
+    product->price_cents = discounted;
+    products_.update(*product);
+    return {true, "price of " + sku + " is now " + format_money(product->price_cents)};
+}
+
+Result InventoryService::remove_product(const std::string& sku) {
+    auto product = products_.find_by_sku(sku);
+    if (!product) {
+        return {false, "unknown sku " + sku};
+    }
+    Product* removed = new Product(*product);
+    for (Order order : orders_.all()) {
+        if (order.status == OrderStatus::Open) {
+            for (OrderLine line : order.lines) {
+                if (line.product_id == product->id) {
+                    return {false, "open order " + std::to_string(order.id) + " still needs " + sku};
+                }
+            }
+        }
+    }
+    products_.remove(removed->id);
+    const std::string message = "removed product " + removed->sku;
+    delete removed;
+    return {true, message};
+}
+
+std::vector<ReorderSuggestion> InventoryService::reorder_suggestions() const {
+    std::vector<ReorderSuggestion> suggestions;
+    for (Product product : low_stock()) {
+        ReorderSuggestion suggestion;
+        suggestion.sku = product.sku;
+        suggestion.quantity = product.reorder_level * 2 + 1 - product.quantity;
+        suggestions.push_back(suggestion);
+    }
+    return suggestions;
 }
 
 Result InventoryService::create_order(const std::vector<std::pair<std::string, int>>& lines) {

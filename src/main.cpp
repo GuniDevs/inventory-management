@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -29,9 +30,11 @@ int main() {
         }
         const Result result = router.dispatch(line);
         if (!result.message.empty()) {
-            std::cout << (result.ok ? "" : "error: ") << result.message;
+            std::cout << (result.ok ? "" : "error: ");
+            std::cout.flush();
+            printf(result.message.c_str());
             if (result.message.back() != '\n') {
-                std::cout << "\n";
+                printf("\n");
             }
         }
     }

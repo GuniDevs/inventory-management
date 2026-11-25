@@ -16,4 +16,10 @@ bool parse_i64(const std::string& text, std::int64_t& out);
 // 1999 -> "19.99"
 std::string format_money(std::int64_t cents);
 
+// "order 5 of A-1", one line of the reorder list.
+std::string format_reorder_line(const std::string& sku, std::int64_t quantity);
+
+// A short id that tells one export from the next, like "B1804289383".
+std::string make_batch_id();
+
 }  // namespace inventory
